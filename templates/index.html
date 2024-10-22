@@ -3,15 +3,147 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Phone Number Scraper</title>
+    <title>Bắt đầu quét số điện thoại</title>
+    <style>
+        .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        .left-panel {
+            width: 70%;
+        }
+        .right-panel {
+            width: 28%;
+            margin-left: 2%;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .button-container {
+            display: inline-flex;
+            gap: 10px;
+        }
+        .result-item {
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+        }
+        .phone-number {
+            margin-right: 10px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .copy-button {
+            margin-left: 10px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        #results {
+            width: 100%;
+            height: 400px;
+            border: 1px solid black;
+            overflow-y: scroll;
+            padding: 10px;
+        }
+        .right-panel img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+    </style>
+    <script>
+        let eventSource;
+        let isScanning = false;  // Trạng thái quét
+
+        function startScan(i_start) {
+            if (isScanning) return;  // Nếu đang quét, không làm gì cả
+
+            isScanning = true;  // Đặt trạng thái đang quét
+            document.getElementById('start-button').disabled = true;  // Vô hiệu hóa nút quét
+
+            eventSource = new EventSource(`/scan?i_start=${i_start}`);
+            eventSource.onmessage = function(event) {
+                const data = event.data.split(' - Số điện thoại: ');
+                const resultsContainer = document.getElementById('results');
+                const listItem = document.createElement('div');
+                listItem.className = 'result-item';
+
+                if (data.length === 2) {
+                    const i_value = data[0];
+                    const phoneNumber = data[1];
+                    listItem.innerHTML = `
+                        <span class="phone-number">${i_value} - Số điện thoại: ${phoneNumber}</span>
+                        <button class="copy-button" onclick="copyToClipboard('${phoneNumber}')">Copy</button>
+                    `;
+                    resultsContainer.appendChild(listItem);
+                    resultsContainer.scrollTop = resultsContainer.scrollHeight;
+                }
+            };
+
+            eventSource.onerror = function() {
+                if (!eventSource.closed) {
+                    console.error("Kết nối bị ngắt hoặc có lỗi xảy ra.");
+                }
+            };
+        }
+
+        function stopScan() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource.closed = true;  // Đánh dấu là đã đóng kết nối
+                isScanning = false;  // Đặt trạng thái là không còn quét
+                document.getElementById('start-button').disabled = false;  // Kích hoạt lại nút quét
+            }
+            fetch('/stop', { method: 'POST' })
+                .then(response => response.text())
+                .then(data => {
+                    console.log("Quá trình quét đã dừng.");
+                })
+                .catch(error => console.error('Lỗi dừng quét:', error));
+        }
+
+        function copyToClipboard(phoneNumber) {
+            navigator.clipboard.writeText(phoneNumber)
+                .catch(err => {
+                    console.error('Lỗi khi sao chép: ', err);
+                });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const form = document.getElementById('scan-form');
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const i_start = document.getElementById('i_start').value;
+                startScan(i_start);
+            });
+        });
+    </script>
 </head>
 <body>
-    <h1>Nhập giá trị bắt đầu để quét số điện thoại</h1>
-    <form action="/scan" method="POST">
-        <label for="i_start">Nhập giá trị bắt đầu (i):</label>
+    <h1>Nhập giá trị i để bắt đầu quét</h1>
+    <form id="scan-form">
+        <label for="i_start">Giá trị i bắt đầu:</label>
         <input type="number" id="i_start" name="i_start" required>
-        <br>
-        <button type="submit">Bắt đầu quét</button>
+        <div class="button-container">
+            <button type="submit" id="start-button">Quét</button>
+            <button type="button" onclick="stopScan()">Dừng quét</button>
+        </div>
     </form>
+
+    <div class="container">
+        <!-- Kết quả quét bên trái -->
+        <div class="left-panel">
+            <h2>Kết quả quét:</h2>
+            <div id="results"></div>
+        </div>
+
+        <!-- Ảnh bên phải -->
+        <div class="right-panel">
+            <img src="/static/images/IMG_4399.jpg" alt="Ảnh minh họa">
+        </div>
+    </div>
 </body>
 </html>

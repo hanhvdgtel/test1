@@ -1,10 +1,11 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, stream_with_context, Response
 import requests
 from bs4 import BeautifulSoup
+import time
 
 app = Flask(__name__)
+stop_scanning = False
 
-# Hàm lấy số điện thoại từ một URL
 def get_phone_number(url):
     try:
         response = requests.get(url)
@@ -21,48 +22,36 @@ def get_phone_number(url):
     except Exception as e:
         return None
 
-# Hàm quét từ i_start và tự động quét lại cùng giá trị i nếu không tìm thấy số điện thoại
 def scan_phone_numbers(i_start):
+    global stop_scanning
     base_url = "https://bannha888.com/thanh-vien/"
     i = i_start
-    results = []
-
-    # Quét liên tục cho đến khi tìm thấy số điện thoại
-    while True:
+    while not stop_scanning:
         url = f"{base_url}{i}"
         phone_number = get_phone_number(url)
-        
-        # Nếu tìm thấy số điện thoại, thêm vào kết quả và tăng giá trị i
+
         if phone_number:
-            results.append({'i': i, 'phone_number': phone_number})
-            print(f"Đã tìm thấy số: {phone_number} tại i={i}")
-            i += 1  # Tăng i khi tìm thấy số điện thoại
+            yield f"data: i: {i} - Số điện thoại: {phone_number}\n\n"
+            i += 1  # Chỉ tăng giá trị i khi tìm thấy số điện thoại
         else:
-            print(f"Không tìm thấy số tại i={i}, quét lại...")
-        
-        # Thực hiện quét lại cùng giá trị i nếu không tìm thấy số
-        if not phone_number:
-            continue
-        else:
-            break  # Thoát vòng lặp khi tìm thấy số
+            time.sleep(1)  # Đợi 1 giây trước khi thử lại cùng giá trị i
 
-    return results, i  # Trả về kết quả và giá trị i cuối cùng
-
-# Trang chủ, form để nhập giá trị bắt đầu
 @app.route('/')
 def index():
     return render_template('index.html')
 
-# Xử lý yêu cầu quét số điện thoại
-@app.route('/scan', methods=['POST'])
+@app.route('/scan', methods=['GET'])
 def scan():
-    i_start = int(request.form['i_start'])
-    
-    # Gọi hàm quét số điện thoại
-    results, next_i = scan_phone_numbers(i_start)
-    
-    # Trả về kết quả cho người dùng và tiếp tục quét nếu cần
-    return render_template('results.html', results=results, next_i=next_i)
+    global stop_scanning
+    stop_scanning = False
+    i_start = int(request.args.get('i_start', 0))
+    return Response(stream_with_context(scan_phone_numbers(i_start)), mimetype='text/event-stream')
+
+@app.route('/stop', methods=['POST'])
+def stop():
+    global stop_scanning
+    stop_scanning = True
+    return 'Scanning stopped'
 
 if __name__ == "__main__":
     app.run(debug=True)

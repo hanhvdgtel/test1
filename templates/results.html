@@ -4,46 +4,45 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kết quả quét số điện thoại</title>
-    <style>
-        .phone-item {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 10px;
+    <script>
+        // Function to copy the phone number to the clipboard
+        function copyToClipboard(phoneNumber) {
+            navigator.clipboard.writeText(phoneNumber)
+                .then(() => {
+                    alert("Đã sao chép: " + phoneNumber);
+                })
+                .catch(err => {
+                    console.error('Lỗi khi sao chép: ', err);
+                });
         }
-    </style>
+    </script>
 </head>
 <body>
     <h1>Kết quả quét số điện thoại</h1>
-
-    <ul>
-        {% for result in results %}
-        <li class="phone-item">
-            <span>i: {{ result.i }} - </span>
-            <span id="phone-number-{{ loop.index }}">{{ result.phone_number }}</span>
-            <button onclick="copyToClipboard('phone-number-{{ loop.index }}')">Copy</button>
-        </li>
-        {% endfor %}
-    </ul>
-
-    <a href="/scan" id="auto-scan-link" style="display: none;"></a>
+    <ul id="results"></ul>
 
     <script>
-        // Tự động quét tiếp nếu không có số điện thoại
-        const next_i = {{ next_i }};
-        if (!{{ results | length }}) {
-            setTimeout(() => {
-                document.getElementById('auto-scan-link').click();
-            }, 1000);  // Đợi 1 giây trước khi quét tiếp
-        }
+        const resultsContainer = document.getElementById('results');
+        const eventSource = new EventSource('/scan');
 
-        function copyToClipboard(elementId) {
-            const phoneNumber = document.getElementById(elementId).innerText;
-            navigator.clipboard.writeText(phoneNumber).then(function() {
-                alert('Số điện thoại đã được sao chép: ' + phoneNumber);
-            }, function(err) {
-                console.error('Lỗi sao chép: ', err);
-            });
-        }
+        eventSource.onmessage = function(event) {
+            const data = event.data.split(' - Số điện thoại: ');
+            const listItem = document.createElement('li');
+
+            if (data.length === 2) {
+                const i_value = data[0];
+                const phoneNumber = data[1];
+
+                listItem.innerHTML = `
+                    ${i_value} - Số điện thoại: ${phoneNumber} 
+                    <button onclick="copyToClipboard('${phoneNumber}')">Copy</button>
+                `;
+            } else {
+                listItem.textContent = event.data;
+            }
+
+            resultsContainer.appendChild(listItem);
+        };
     </script>
 </body>
 </html>

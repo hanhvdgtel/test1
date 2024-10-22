@@ -6,21 +6,29 @@ import time
 app = Flask(__name__)
 stop_scanning = False
 
-def get_phone_number(url):
+def get_info(url):
     try:
         response = requests.get(url)
         if response.status_code == 200:
             soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Tìm thông tin title
+            title_tag = soup.find('a', class_='swipebox')
+            title = title_tag['title'] if title_tag else None
+
+            # Tìm số điện thoại
+            phone_number = None
             a_tags = soup.find_all('a', href=True)
             for a_tag in a_tags:
                 if a_tag['href'].startswith('tel:'):
                     phone_number = a_tag['href'].replace('tel:', '')
-                    return phone_number
-            return None
+                    break
+            
+            return title, phone_number
         else:
-            return None
+            return None, None
     except Exception as e:
-        return None
+        return None, None
 
 def scan_phone_numbers(i_start):
     global stop_scanning
@@ -28,11 +36,13 @@ def scan_phone_numbers(i_start):
     i = i_start
     while not stop_scanning:
         url = f"{base_url}{i}"
-        phone_number = get_phone_number(url)
+        title, phone_number = get_info(url)
 
-        if phone_number:
-            yield f"data: i: {i} - Số điện thoại: {phone_number}\n\n"
-            i += 1  # Chỉ tăng giá trị i khi tìm thấy số điện thoại
+        if title and phone_number:
+            yield f"data: i: {i} - Title: {title} - Số điện thoại: {phone_number}\n\n"
+            i += 1  # Tăng giá trị i khi tìm thấy cả title và số điện thoại
+        elif title and not phone_number:
+            i += 1  # Tăng giá trị i nếu chỉ tìm thấy title
         else:
             time.sleep(1)  # Đợi 1 giây trước khi thử lại cùng giá trị i
 
